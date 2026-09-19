@@ -1,0 +1,9 @@
+{
+  "lockfileVersion": 1,
+  "plugins": {
+    "mangoWmLayoutManager": {
+      "repo": "https://github.com/omarluq/DMSMangoWCLayoutManager",
+      "commit": "f4824511dad314db9881a1974387a4546e5aae6d"
+    }
+  }
+}

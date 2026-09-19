@@ -1,0 +1,6 @@
+*.backup*
+*.dmsbackup*
+*.pre-*
+*.with-dragswap
+*.tar.gz
+screenshot.png

@@ -1,0 +1,8 @@
+result
+result-*
+*.bak*
+*.tar.gz
+# Per-machine generated hardware config — NEVER commit (contains disk UUIDs).
+# Generate on first install: sudo nixos-generate-config --show-hardware-config > hardware-configuration.nix
+hardware-configuration.nix
+
