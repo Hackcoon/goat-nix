@@ -6,6 +6,12 @@
 #
 #     home-manager.users.goat = import ./home.nix;
 #
+# WHAT HOME MANAGER IS: while NixOS modules own SYSTEM state (/etc,
+# systemd services, kernels), Home Manager owns USER state (~/.config,
+# ~/.local, per-user services). It writes dotfiles as symlinks into
+# the Nix store, so `nixos-rebuild switch` atomically updates your
+# editor/terminal/git config alongside the OS.
+#
 # MANAGED HERE (user-level things):
 #   - git identity + delta pager
 #   - EDITOR/VISUAL (vscodium)
@@ -37,12 +43,15 @@
 { config, pkgs, lib, dsearch, ... }:
 
 {
-  home.username = "goat";
-  home.homeDirectory = "/home/goat";
+  home.username = "goat";  # must match users.users."goat" in modules/users/users.nix
+  home.homeDirectory = "/home/goat";  # HM symlinks everything relative to here
   # Matches system.stateVersion — do not change.
+  # (HM uses this to decide migration behavior for old dotfile formats;
+  # bumping it can silently rewrite your config schemas.)
   home.stateVersion = "26.05";
 
   # Let HM manage itself inside your user profile.
+  # (Installs the `home-manager` CLI for `home-manager news`/generations.)
   programs.home-manager.enable = true;
 
   # ----------------------------------------------------------------
@@ -63,8 +72,13 @@
   # ----------------------------------------------------------------
   # Main Brave profile (extensions, logins). Isolated per-app
   # profiles would lose both — see guides/web-apps-on-nixos.md.
+  # xdg.enable manages ~/.local/share/applications + mime database so
+  # the entries below appear in launchers (rofi/DMS/KDE menu).
   xdg.enable = true;
 
+  # YouTube site-specific browser window: opens without browser chrome
+  # (--app), with its own taskbar icon (StartupWMClass matched to --class)
+  # so it groups separately from the main Brave window.
   xdg.desktopEntries.youtube = {
     name = "YouTube";
     exec = "brave --app=https://www.youtube.com --class=YouTube";
@@ -77,6 +91,9 @@
   # ----------------------------------------------------------------
   # git (identity + settings) and delta (nicer diffs)
   # ----------------------------------------------------------------
+  # Git identity used for every commit made on this machine, plus
+  # workflow defaults: `main` for new repos, merge (not rebase) on pull,
+  # auto-create upstream branch on first push, highlight moved lines.
   programs.git = {
     enable = true;
 
@@ -104,6 +121,9 @@
   # Previously ~/.config/kitty/ was EMPTY (100% defaults), so this
   # is a pure upgrade, not a takeover. Font matches the system
   # default monospace (fonts.nix); background forced pure black.
+  # themeFile = whole color scheme at once; `settings` below tweaks
+  # individual kitty.conf keys on top of it. shellIntegration injects
+  # shell hooks so kitty tracks cwd + prompt marks in zsh.
   programs.kitty = {
     enable = true;
 
@@ -140,6 +160,13 @@
   # conf on exit (save_config_on_exit) — under HM the file is a
   # read-only store symlink, so runtime tweaks live in memory for
   # the session only. Make tweaks permanent by editing here.
+  # SECTION GUIDE to the settings below:
+  #   Layout/drawing = box style, visible boxes, refresh rate (update_ms).
+  #   Process list   = sort order, tree view, per-core breakdown.
+  #   CPU box        = graph scaling, temps, frequency readout.
+  #   Memory/disks   = swap visibility, disk I/O stats.
+  #   Network        = up/down graph scale + autoscaling.
+  #   Misc           = battery, clock, vim keys, mouse, GPU mirrors.
   programs.btop = {
     enable = true;
     settings = {
@@ -252,5 +279,56 @@
     enable = true;
     # Example (defaults are fine to start):
     # config = { paths = [ "/home/goat" ]; };
+  };
+
+  # ----------------------------------------------------------------
+  # kanshi — auto-configure displays when HDMI is plugged/unplugged
+  # ----------------------------------------------------------------
+  # kanshi is a Wayland output daemon (wlroots protocol level), so one
+  # config covers BOTH wlroots sessions: Hyprland and MangoWC.
+  # KDE Plasma ignores kanshi and uses its own kscreen — no conflict.
+  #
+  # HOW IT WORKS: kanshi watches connected outputs and applies the first
+  # profile whose criteria all match. Plug HDMI -> "docked" applies.
+  # Unplug -> falls back to "undocked". No replug script needed.
+  #
+  # FIRST-RUN CALIBRATION (names differ per machine/GPU wiring):
+  #   1. Plug in HDMI, then run:  wlr-randr   (also: `hyprctl monitors`
+  #      or `mmsg get all-monitors` in the matching session)
+  #   2. Replace the criteria/mode/position values below with what you see.
+  #      - Internal panel on this laptop has shown up as DP-2 in MangoWC
+  #        (see dotfiles/mango/mango/dms/outputs.conf); under Hyprland it
+  #        may instead be eDP-1 — use whatever `wlr-randr` reports.
+  #      - HDMI port is usually HDMI-A-1 (AMD side) or HDMI-0/HDMI-A-1
+  #        (NVIDIA side, PRIME sync) — again, trust `wlr-randr`.
+  #   3. Rebuild, then test: `systemctl --user restart kanshi` and
+  #      plug/unplug while watching `journalctl --user -u kanshi -f`.
+  services.kanshi = {
+    enable = true;
+    settings = [
+      # Laptop panel alone (fallback when nothing external is connected).
+      {
+        profile.name = "undocked";
+        profile.outputs = [
+          { criteria = "eDP-1"; }
+        ];
+      }
+      # Laptop panel + external HDMI display, extended (HDMI right of panel).
+      {
+        profile.name = "docked-hdmi";
+        profile.outputs = [
+          {
+            criteria = "eDP-1";
+            mode = "1920x1080@144Hz";
+            position = "0,0";
+          }
+          {
+            criteria = "HDMI-A-1";
+            mode = "1920x1080@60Hz";
+            position = "1920,0";
+          }
+        ];
+      }
+    ];
   };
 }

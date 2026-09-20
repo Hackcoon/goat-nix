@@ -18,20 +18,23 @@ with lib;
   hardware.nvidia = {
     # Saves VRAM contents to disk before sleep and restores on wake —
     # prevents KWin/Plasma from losing display buffers and crashing
-    # on resume.
+    # on resume. (On hybrid laptops this lives in hardware-profiles.nix.)
     powerManagement.enable = true;
 
     # Kernel Mode Setting — required for proper display mode
     # restoration on wake and mandatory for Wayland compositors.
+    # (Without KMS the driver can't set resolutions in-kernel; Wayland
+    # sessions refuse to start and resume leaves a black screen.)
     modesetting.enable = true;
 
-    open = false;            # proprietary userspace (best for TU116)
-    nvidiaSettings = true;
-    package = config.boot.kernelPackages.nvidiaPackages.stable;
+    open = false;            # proprietary kernel modules (best for TU116 desktop card; 50-series Blackwell datacenter cards REQUIRE open=true)
+    nvidiaSettings = true;   # installs the nvidia-settings control panel (clock offsets, fan, PRIME profiles)
+    package = config.boot.kernelPackages.nvidiaPackages.stable;  # tested driver branch tied to the running kernel (see core/boot.nix); use .latest only if a game needs a newer fix
   };
 
   environment.sessionVariables = {
-    # Direct GLX apps to NVIDIA driver
+    # Direct GLX apps to NVIDIA driver (without this, glXQuery may pick
+    # Mesa/llvmpipe and games render on the CPU fallback).
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
 
     # Hardware acceleration — keep disabled for now (breaks vesktop).
@@ -44,6 +47,8 @@ with lib;
   };
 
   # OpenGL/graphics support, including 32-bit for gaming
+  # (Steam + Proton + Wine are largely 32-bit; without enable32Bit they
+  # launch to a black window or fail with missing libGL errors).
   hardware.graphics = {
     enable = true;
     enable32Bit = true;

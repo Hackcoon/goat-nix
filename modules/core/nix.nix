@@ -1,4 +1,10 @@
 # Nix-the-package-manager configuration: settings, caches, gc, helpers.
+#
+# WHAT THIS FILE OWNS:
+#   - Build parallelism (cores/max-jobs) — how hard `nixos-rebuild` pushes CPU.
+#   - Binary caches (substituters) + trust keys — where prebuilt binaries come from.
+#   - Housekeeping: auto-optimise (dedup store), nh-based garbage collection.
+#   - Compatibility shims: nix-ld (unpatched binaries), insecure-package allows.
 { config, pkgs, lib, ... }:
 
 {
@@ -89,6 +95,10 @@
     };
   };
 
-  # Enable nix-ld to run unpatched dynamic binaries (non-FHS compliance)
+  # nix-ld: shim that lets *unpatched* binaries run on NixOS.
+  # NixOS doesn't put libraries in /lib or /usr/lib, so downloaded
+  # binaries (VS Code extensions, npm packages, AppImages, game mods)
+  # fail with "No such file or directory" for ld-linux. nix-ld provides
+  # that loader and resolves libs from the system. Zero cost when unused.
   programs.nix-ld.enable = true;
 }

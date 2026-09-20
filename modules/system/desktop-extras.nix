@@ -11,6 +11,10 @@ let
 in
 {
   options.desktop-extras = {
+    # linuxbeginnings-style switches: each mkEnableOption creates a
+    # `config.desktop-extras.<name>.enable` boolean (default false).
+    # Flip them per host in configuration.nix — e.g.:
+    #   desktop-extras = { zram.enable = true; printing.enable = true; };
     flatpak.enable      = mkEnableOption "Flatpak + flathub remote";
     zram.enable          = mkEnableOption "zram swap (no swap partition needed)";
     fstrim.enable         = mkEnableOption "weekly SSD fstrim";
@@ -27,6 +31,9 @@ in
 
   config = mkMerge [
     # ── Flatpak ──
+    # Flatpak daemon + one-shot service that registers the Flathub app
+    # store on first boot. Without the remote, `flatpak install` finds
+    # nothing — this is the step that makes the daemon useful.
     (mkIf cfg.flatpak.enable {
       services.flatpak.enable = true;
       systemd.services.flatpak-repo = {
@@ -38,6 +45,9 @@ in
     })
 
     # ── zram ──
+    # Compressed RAM swap: no swap partition needed, zero SSD wear,
+    # faster than disk swap. 30% of RAM at priority 100 (used before any
+    # disk swap). zstd = best compression-speed tradeoff.
     (mkIf cfg.zram.enable {
       zramSwap = {
         enable = true;
@@ -49,6 +59,9 @@ in
     })
 
     # ── SSD trim ──
+    # fstrim = TRIM/discard timer (same as ssd.nix default). Duplicate here
+    # so the "extras" host profile can request trimming on its own without
+    # importing the SSD module.
     (mkIf cfg.fstrim.enable {
       services.fstrim = {
         enable = true;
@@ -57,6 +70,9 @@ in
     })
 
     # ── NFS ──
+    # Network File System SERVER (share local dirs to other machines).
+    # rpcbind = portmapper NFS clients need to find the server.
+    # Client-only mounts need neither — just mount with /etc/fstab.
     (mkIf cfg.nfs.enable {
       services.rpcbind.enable = true;
       services.nfs.server.enable = true;
@@ -69,6 +85,10 @@ in
     })
 
     # ── Scanners ──
+    # SANE = scanner access API. sane-airscan covers modern network
+    # (eSCL/WSD/AirScan) scanners without vendor drivers. The built-in
+    # escl backend conflicts with airscan, so it's disabled to avoid
+    # duplicate/broken scanner entries.
     (mkIf cfg.sane.enable {
       hardware.sane = {
         enable = true;
@@ -78,6 +98,9 @@ in
     })
 
     # ── Logitech ──
+    # Wireless receiver support (Bolt/Unifying) + solaar GUI for pairing,
+    # battery, button remapping. hardware.logitech.wireless handles the
+    # udev rules so receivers work without root.
     (mkIf cfg.logitech.enable {
       # programs.solaar.enable = true;   # ⚠ solaar is an unfree pkg behind programs.solaar;
                                           # if your nixpkgs lacks the option, install pkgs.solaar instead:
@@ -86,6 +109,9 @@ in
     })
 
     # ── OpenRGB ──
+    # Open-source RGB control (keyboards, mice, RAM, motherboard LEDs).
+    # motherboard = which SMBus driver to load ("intel" or "amd") — wrong
+    # value just means onboard LEDs aren't found; USB devices still work.
     (mkIf cfg.openrgb.enable {
       services.hardware.openrgb = {
         enable = true;
@@ -94,6 +120,8 @@ in
     })
 
     # ── Plymouth boot splash ──
+    # Graphical boot animation hiding kernel messages. Purely cosmetic —
+    # disable if you want to see boot logs scroll by for debugging.
     (mkIf cfg.plymouth.enable {
       boot.plymouth.enable = true;
     })
@@ -128,6 +156,9 @@ in
     })
 
     # ── nh — friendly nixos-rebuild wrapper ──
+    # nh = nicer rebuild CLI (`nh os switch` with diffs + progress).
+    # clean.extraArgs auto-trims generations (--keep-since 7d --keep 5).
+    # nix-output-monitor + nvd give the pretty build diff output.
     (mkIf cfg.nh.enable {
       programs.nh = {
         enable = true;

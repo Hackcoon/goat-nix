@@ -1,5 +1,12 @@
 # Thunar file manager + the services it needs (mounting, trash,
 # thumbnails, preference persistence).
+#
+# Thunar alone is just a window — without these three helpers it can't
+# mount USB sticks, show thumbnails, remember view settings, or trash
+# files (deletes would be permanent):
+#   gvfs    = virtual filesystem: MTP phones, SMB shares, trash://, USB mounting
+#   tumbler = thumbnail daemon: image/video previews in the file grid
+#   xfconf  = settings store: remembers sort order, zoom, side pane, etc.
 { config, pkgs, lib, ... }:
 
 {

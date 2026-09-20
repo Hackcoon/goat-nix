@@ -32,10 +32,15 @@
 
   # Swap writes degrade flash storage. Offload swap to compressed
   # RAM and keep the kernel from swapping until absolutely necessary.
+  # zramSwap = compressed RAM block device used as swap (no disk wear,
+  # much faster than disk swap). swappiness 10 (default 60): kernel
+  # avoids swapping until RAM is ~90% full — desktop stays responsive.
   zramSwap.enable = true;
   boot.kernel.sysctl."vm.swappiness" = 10;
 
-  # Weekly TRIM for SSD health (safely maintains lifespan)
+  # Weekly TRIM for SSD health (safely maintains lifespan): tells the
+  # SSD which blocks are free so its garbage collector doesn't waste
+  # write cycles copying dead data. Weekly timer, runs in background.
   services.fstrim.enable = true;
 
   # smartd — continuous disk health monitoring (near-zero CPU, warns
@@ -43,11 +48,14 @@
   # services.smartd.enable = true;
 
   # Cap the systemd journal at 200M — logs are still written exactly
-  # the same; older ones are just trimmed automatically.
+  # the same; older ones are just trimmed automatically. Without a cap,
+  # /var/log/journal grows unbounded on a long-lived install.
   services.journald.extraConfig = "SystemMaxUse=200M";
 
   # Disable cgroup-based user session freezing during sleep —
-  # prevents Wayland/Plasma crashes after resume.
+  # prevents Wayland/Plasma crashes after resume. Upstream freezes all
+  # user processes pre-sleep to speed suspend; on compositors with GPU
+  # state this races and the session never thaws cleanly.
   systemd.services = {
     "systemd-suspend".environment.SYSTEMD_SLEEP_FREEZE_USER_SESSIONS = "false";
     "systemd-hibernate".environment.SYSTEMD_SLEEP_FREEZE_USER_SESSIONS = "false";

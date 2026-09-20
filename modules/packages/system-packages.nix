@@ -1,5 +1,10 @@
 # System-wide packages. Wrapped/patched apps live in apps-fixed.nix.
 # Unstable packages use unstablePkgs (from flake.nix specialArgs).
+#
+# CONVENTION: every entry carries an end-of-line comment saying what it
+# IS, because bare nixpkgs names (dgop, gdu, solaar...) are opaque.
+# Sections group by job: hardware utils first, then monitoring, desktop,
+# CLI, dev, browsers, files, media, KDE extras, theming, thumbnails.
 { config, pkgs, lib, unstablePkgs, ... }:
 
 {
@@ -24,8 +29,8 @@
     nvitop                  # Interactive NVIDIA GPU resource monitor (dGPU side)
     radeontop               # AMD GPU monitor (780M iGPU side, needs video group)
     lact                    # AMD GPU controls (fan curves, clocks, power)
-    dgop                    # Go dependency graph tool
-    gdu                     # GNOME disk usage analyzer
+    dgop                    # terminal GPU monitor (dank-flavored nvtop alternative)
+    gdu                     # fast disk-usage analyzer (what's eating the SSD)
 
     # === WAYLAND & DESKTOP UTILITIES ===
     kitty                   # GPU-based terminal
@@ -62,7 +67,7 @@
     nil                     # Nix language server (mainly for fresh editor)
     nixd                    # Feature-rich Nix language server
     git                     # Version control
-    gh                      # GitHub CLI
+    gh                      # GitHub CLI (`gh repo clone`, `gh pr create` from terminal)
     gitkraken               # Git GUI (requires allowUnfree)
 
     # === AI TOOLS ===
@@ -132,7 +137,8 @@
                             # commented service block below)
     localsend               # AirDrop equivalent for local network
 
-    # Backend engines ark needs to handle all formats
+    # Backend engines ark needs to handle all formats (without these,
+    # Dolphin's Ark extracts ZIP but errors on RAR/7z).
     unzip                  # Extract ZIP archives
     unrar                  # Extract RAR archives
     p7zip                  # Extract 7z archives
@@ -163,16 +169,16 @@
     heroic                  # GOG / Epic / Amazon Games launcher
     bottles                 # Wine prefix manager
 
-    # Gaming performance and diagnostics
-    mangohud
-    vulkan-tools
-    mesa-demos
+    # Gaming performance overlay + GPU API test tools
+    mangohud                # fps/frametime overlay (Shift+F12, see gaming.nix)
+    vulkan-tools            # vkcube/vulkaninfo — verify Vulkan works on each GPU
+    mesa-demos              # glxinfo/glxgears — verify GLX + Mesa (used in README checks)
 
-    # Wine/Proton helpers
-    protontricks
-    protonup-qt
-    winetricks
-    wineWow64Packages.stable
+    # Wine/Proton helpers (Windows games outside Steam)
+    protontricks            # winetricks wrapper for Proton prefixes
+    protonup-qt             # installs community Proton-GE builds for Steam
+    winetricks              # per-game DLL/dependency installer for Wine prefixes
+    wineWow64Packages.stable  # 32+64-bit Wine (runs .exe directly, non-Steam)
 
     # === MEDIA, AUDIO & VIDEO ===
     mpv                     # Highly configurable video player
@@ -186,17 +192,17 @@
     easyeffects             # Audio effects for PipeWire apps
 
     # === KDE EXTRAS ===
-    kdePackages.sddm-kcm    # Login screen manager
-    kdePackages.kcalc       # Scientific calculator
+    kdePackages.sddm-kcm    # Login screen manager (configure SDDM theme/users in System Settings)
+    kdePackages.kcalc       # Scientific calculator (KDE default)
 
     # === THEMES & CURSORS ===
     papirus-icon-theme      # Papirus-Dark icons (Dolphin, see desktop/themes.nix)
     google-cursor           # Cursor theme (provides GoogleDot-* used in
                             # desktop/themes.nix — keep in sync)
-    bibata-cursors          # Modern triangular cursor
-    sox                     # `play` command for event sounds
+    bibata-cursors          # Modern triangular cursor (alt to GoogleDot, pick in nwg-look)
+    sox                     # `play` command for event sounds (notification chimes in scripts)
 
-    # === THUMBNAIL SUPPORT ===
+    # === THUMBNAIL SUPPORT (Dolphin previews — without these, files show generic icons) ===
     kdePackages.kdegraphics-thumbnailers   # PDFs, EPS
     kdePackages.ffmpegthumbs               # videos
     kdePackages.kimageformats              # WebP, RAW, etc.
@@ -204,6 +210,8 @@
     epub-thumbnailer                       # EPub thumbnails
 
     # === FROM UNSTABLE (nixos-unstable via flake input) ===
+    # These ride `unstablePkgs` (flake.nix specialArgs) for fresher builds
+    # than stable 26.05 carries — AI tools move fast, stale = broken APIs.
     unstablePkgs.llmfit     # LLM model size finder
     unstablePkgs.opencode   # AI coding agent for the terminal (unstable = newer)
     unstablePkgs.opencode-desktop  # AI coding agent desktop client (unstable)

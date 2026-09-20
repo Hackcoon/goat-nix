@@ -24,9 +24,9 @@ with lib;
           worse battery — pick this when NVIDIA is the primary/gaming GPU).
         '';
       };
-      intelBusID  = mkOption { type = types.str; default = "PCI:0:2:0"; description = "Intel iGPU BusID (Intel+NVIDIA hybrids)"; };
-      amdgpuBusID = mkOption { type = types.str; default = "PCI:0:2:0"; description = "AMD iGPU BusID (AMD+NVIDIA hybrids, e.g. Ryzen 7840HS + Radeon 780M). Find with `lspci`, convert c5:00.0 -> PCI:197:0:0 (hex->dec)."; };
-      nvidiaBusID = mkOption { type = types.str; default = "PCI:1:0:0"; };
+      intelBusID  = mkOption { type = types.str; default = "PCI:0:2:0"; description = "PCI bus ID of the Intel iGPU (Intel+NVIDIA hybrids only). Find with `lspci | grep VGA`, convert hex bus (00:02.0) to decimal PCI:0:2:0."; };
+      amdgpuBusID = mkOption { type = types.str; default = "PCI:0:2:0"; description = "PCI bus ID of the AMD iGPU/APU (AMD+NVIDIA hybrids, e.g. Ryzen 7840HS + Radeon 780M). Find with `lspci`, convert c5:00.0 -> PCI:197:0:0 (hex->dec)."; };
+      nvidiaBusID = mkOption { type = types.str; default = "PCI:1:0:0"; description = "PCI bus ID of the NVIDIA dGPU. Same lspci hex->dec conversion (01:00.0 -> PCI:1:0:0). Wrong IDs = black screen on boot."; };
     };
     amdgpu.enable       = mkEnableOption "AMD GPU (amdgpu kernel driver)";
     intel.enable        = mkEnableOption "Intel integrated graphics";
@@ -64,16 +64,26 @@ with lib;
     #   Required flags: videoDrivers=[ "nvidia" ], sync.enable=true,
     #   finegrained power MUST be off (dGPU never sleeps in sync mode).
     (mkIf config.hardware-profiles.nvidia-prime.enable (let
+      # Local shorthand: true when configuration.nix picked mode = "sync"
+      # (NVIDIA renders everything). False = "offload" (iGPU desktop,
+      # dGPU sleeps until `nvidia-offload <app>`).
       syncMode = config.hardware-profiles.nvidia-prime.mode == "sync";
     in {
+      # X drivers to load. Sync mode: NVIDIA only (it drives the screen).
+      # Offload + AMD hybrid: amdgpu first (desktop), nvidia second (offload
+      # target). Offload + Intel hybrid: plain nvidia (modesetting covers iGPU).
       services.xserver.videoDrivers = mkDefault (
         if syncMode then [ "nvidia" ]
         else if config.hardware-profiles.amdgpu.enable then [ "amdgpu" "nvidia" ]
         else [ "nvidia" ]
       );
       hardware.graphics.enable = mkDefault true;
+      # NVIDIA's userspace driver is proprietary (unfree license) — this
+      # allowUnfree covers just the driver, not the whole system.
       nixpkgs.config.allowUnfree = mkDefault true; # NVIDIA userland is unfree
       hardware.nvidia = {
+        # Kernel Mode Setting: lets the NVIDIA driver set display modes in
+        # the kernel. Required for Wayland compositors + clean resume.
         modesetting.enable = mkDefault true;
         # PROPRIETARY-FIRST: closed kernel modules for the whole stack.
         # Rationale: on a gaming-first PRIME-sync laptop, the proprietary
@@ -125,6 +135,7 @@ with lib;
       hardware.graphics = {
         enable = mkDefault true;
         enable32Bit = mkDefault true; # Steam/Proton need 32-bit RADV
+        # Userspace GL/Vulkan/VAAPI drivers layered on the amdgpu kernel driver:
         extraPackages = with pkgs; [
           mesa                  # RADV Vulkan + Mesa VAAPI (radeonsi)
           vulkan-loader         # libvulkan.so.1 for Chromium/Brave
@@ -135,21 +146,26 @@ with lib;
       };
     })
 
-    # ── Intel iGPU ──
+    # ── Intel iGPU (video decode via VAAPI) ──
     (mkIf config.hardware-profiles.intel.enable {
+      # modesetting = generic kernel modesetting driver (Intel has no
+      # proprietary driver to load — the iGPU just works via the kernel).
       services.xserver.videoDrivers = mkDefault [ "modesetting" ];
       hardware.graphics = {
         enable = mkDefault true;
         extraPackages = with pkgs; [
           intel-media-driver       # Broadwell+ VAAPI
-          vaapiIntel
-          vaapiVdpau
-          libvdpau-va-gl
+          vaapiIntel               # older-gen Intel VAAPI (pre-Broadwell iGPUs)
+          vaapiVdpau               # VDPAU apps (old games/players) via VAAPI
+          libvdpau-va-gl           # alternate VDPAU-over-VAAPI bridge
         ];
       };
     })
 
     # ── VM guest (their vm-guest-services.nix) ──
+    # Only enable inside a VM: installs the guest agent (host sees IP,
+    # enables clean shutdown) + webdav sharing. spice-vdagentd stays off
+    # because it forces the guest display down to 1920x1080.
     (mkIf config.hardware-profiles.vm-guest.enable {
       services.qemuGuest.enable = mkDefault true;
       services.spice-vdagentd.enable = mkDefault false;   # their note: breaks to 1920x1080
@@ -157,6 +173,8 @@ with lib;
     })
 
     # ── Local hardware clock (dual-boot with Windows) ──
+    # Windows stores local time in the RTC, Linux expects UTC — without this
+    # the clock jumps hours every time you switch OSes. Single-boot: leave off.
     (mkIf config.hardware-profiles.local-hw-clock.enable {
       time.hardwareClockInLocalTime = mkDefault true;
     })

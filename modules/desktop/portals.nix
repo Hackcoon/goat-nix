@@ -1,6 +1,20 @@
-# XDG desktop portals — KDE Plasma and Hyprland have native portals,
-# GTK is the general fallback. The wlroots portal stays installed for
-# possible future MangoWC use but is not a default for any session.
+# XDG desktop portals — per-desktop screen-share / file-picker backends.
+#
+# WHAT A PORTAL IS: a D-Bus broker between sandboxed apps (Flatpak,
+# browsers, Electron) and the compositor. When an app asks "share my
+# screen" or "open a file picker", the portal routes that request to
+# the compositor-specific backend. Wrong backend = black screenshare
+# or frozen file dialogs.
+#
+# BACKENDS INSTALLED HERE:
+#   - gtk:      generic fallback (file chooser, print, settings). Used by
+#               every session as last resort via common.default.
+#   - hyprland: Hyprland's screencast + global shortcuts (hyprland.default).
+#   - kde:      Plasma's screencast + remote desktop (kde.default).
+#   - wlr:      generic wlroots screencast. Kept installed for a future
+#               MangoWC session, but NOT a default for any session here —
+#               the mango routing lives in mango-dms.nix (wlr + gtk).
+# KDE Plasma and Hyprland each get their native portal first, gtk second.
 { config, pkgs, lib, ... }:
 
 {

@@ -49,31 +49,33 @@
     swaynotificationcenter   # swaync + swaync-client (SUPER SHIFT+N panel)
     libnotify                # notify-send (all your scripts use it)
 
-    # ---- Screenshots ----
-    grim
-    slurp
+    # ---- Screenshots (grim = capture, slurp = region select, satty/swappy = annotate) ----
+    grim                   # Wayland screenshot capture (ScreenShot.sh backend)
+    slurp                  # interactive region picker (feeds geometry to grim)
     satty          # SUPER+SHIFT+S annotator
     swappy         # ScreenShot.sh --swappy backend (JaKooLit parity)
 
     # ---- Audio / media / misc (used by scripts + binds + fury-bar) ----
     pamixer                # Volume.sh CLI control
     playerctl              # MediaCtrl.sh MPRIS
-    brightnessctl          # brightness control for scripts
-    pavucontrol            # GUI mixer
-    mpv                    # RofiBeats.sh streams
-    jq                     # JSON parsing everywhere
-    wlr-randr              # display settings
-    lm_sensors             # temps (fury-bar StatsPill reads `sensors`)
-    networkmanagerapplet   # nm-applet tray
-    python3                # URL-encoding etc.
+    brightnessctl          # backlight/brightness keys for scripts + DMS widget fallback
+    pavucontrol            # graphical PulseAudio/PipeWire volume mixer (per-app levels)
+    mpv                    # video player backend (RofiBeats.sh streams audio)
+    jq                     # JSON parser for scripts (mmsg/dms IPC output)
+    wlr-randr              # Wayland display configurator (resolution/refresh CLI)
+    lm_sensors             # `sensors` temps readout (fury-bar StatsPill reads it)
+    networkmanagerapplet   # nm-applet tray icon (GUI Wi-Fi picker)
+    python3                # URL-encoding etc. (scripts percent-encode queries)
     xdg-utils              # xdg-open (SUPER+B browser bind)
-    # rfkill: provided by util-linux (already in system packages)
-    cava                   # waybar cava_mviz module + fury-bar
-    bc                     # WallpaperSelect.sh / Dropterminal.sh math
+    # rfkill: airplane-mode CLI (rfkill list/block) — provided by util-linux
+    # (already in system packages), so no separate package entry needed.
+    cava                   # audio visualizer backend (waybar cava_mviz + fury-bar)
+    bc                     # CLI calculator (WallpaperSelect.sh / Dropterminal.sh math)
     psmisc                 # killall (Refresh.sh, WaybarStyles.sh, WallpaperEffects.sh)
     mpvpaper               # video wallpapers (WallpaperSelect.sh video branch)
   ];
 
-  # UPower: battery status for fury-bar
+  # UPower: battery/status D-Bus daemon. fury-bar's battery pill and
+  # `upower -d` read from here. Harmless on desktop (no battery found).
   services.upower.enable = lib.mkDefault true;
 }

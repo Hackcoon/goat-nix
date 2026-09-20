@@ -1,3 +1,21 @@
+# DNS provider switch — encrypted DNS (DoT) via systemd-resolved + NetworkManager.
+#
+# WHAT THIS DOES:
+#   - Forces NetworkManager to use systemd-resolved instead of pushing
+#     whatever DNS the Wi-Fi hotspot / router advertises. That stops
+#     captive portals and ISPs from silently redirecting your lookups.
+#   - Sets `ignore-auto-dns = true` so DHCP-provided servers are ignored
+#     (except in "native" mode) — your chosen provider always wins.
+#   - Enables DNS-over-TLS (DoT): queries leave the machine encrypted.
+#     DNSSEC stays off because strict validation breaks real domains
+#     (e.g. agentrouter.org CNAMEs with no signature).
+#
+# SWITCHING PROVIDERS (in configuration.nix):
+#   dns.provider = "quad9" | "cloudflare" | "google" | "native";
+#   - quad9/cloudflare/google: encrypted DoT to that provider, with the
+#     other two as fallback if the primary is unreachable.
+#   - native: plain DHCP DNS, no encryption — use on networks where DoT
+#     is blocked (hotels, corporate Wi-Fi) or for debugging.
 { config, pkgs, lib, ... }:
 with lib;
 let
@@ -11,8 +29,13 @@ in
   };
   config = mkMerge [
     {
+      # Route ALL lookups through systemd-resolved (127.0.0.53 stub), so
+      # per-link DNS + DoT settings below actually apply. Without this,
+      # NM writes the router's servers straight into /etc/resolv.conf.
       networking.networkmanager.dns = "systemd-resolved";
       networking.networkmanager.connectionConfig = {
+        # Ignore router-advertised DNS — the nameservers set per-provider
+        # below always win. (Native mode mkForces these back to false.)
         "ipv4.ignore-auto-dns" = true;
         "ipv6.ignore-auto-dns" = true;
       };

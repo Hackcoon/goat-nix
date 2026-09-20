@@ -9,6 +9,8 @@
 # Pinning to Breeze-Dark (present in /run/current-
 # system/sw/share/themes/ via the breeze-gtk package) keeps
 # Electron UIs consistent with the Plasma look in every session.
+# XDG_MENU_PREFIX=plasma-: KDE's freedesktop menu namespace, so
+# app launchers resolve KDE-provided .directory entries.
 { config, pkgs, lib, ... }:
 
 {
@@ -18,12 +20,16 @@
     #   Borealis-cursors, bibata-cursors-translucent, bibata-cursors
     #   macOS-like: apple-cursor, afterglow-cursors-recolored
     #   Windows-like: openzone-cursors
+    # GoogleDot-Black = dark dot cursor (fits the black/red desktop).
     XCURSOR_THEME = "GoogleDot-Black";
 
     # Standard cursor sizes: 22, 24, 32, 48, 64
+    # 22 = small but readable at 1080p; HiDPI panels want 32+.
     XCURSOR_SIZE = "22";
 
     # Dark GTK theme for Electron/Chromium apps under Plasma.
+    # (Library-level override — wins even when xsettings/gsettings says
+    # otherwise. Remove to let per-desktop settings decide again.)
     GTK_THEME = "Breeze-Dark";
 
     # Use KDE's application-menu namespace for Dolphin and other KDE apps.

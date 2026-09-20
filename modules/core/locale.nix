@@ -2,6 +2,12 @@
 #
 # Ronny's machine: lives in Dubai, Spanish physical keyboard, but wants
 # everything in ENGLISH (no Arabic locale anywhere).
+#
+# Three separate layers — don't conflate them:
+#   - timeZone  = wall-clock time (Asia/Dubai = UTC+4, no DST).
+#   - defaultLocale = language/apps (en_US = English menus, dates, websites).
+#   - keyMap/xkb layout = physical key positions (es = Spanish keyboard).
+# Changing locale never changes the keyboard and vice-versa.
 { config, pkgs, lib, ... }:
 
 {

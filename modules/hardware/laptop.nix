@@ -73,25 +73,28 @@ in
     # Needs disk swap for hibernate (zram alone cannot hibernate).
     # Without disk swap, suspend still works, hibernate fails gracefully.
     systemd.sleep.extraConfig = ''
-      HibernateDelaySec=2h
-      SuspendState=mem
+      HibernateDelaySec=2h   # stay in light sleep 2h, then hibernate to disk
+      SuspendState=mem      # plain RAM sleep (not standby) — lowest idle draw
     '';
     # Lid + idle behavior: close lid = sleep, docked = ignore (external monitor).
     services.logind.settings.Login = {
       HandleLidSwitch = "suspend-then-hibernate"; # lid close on battery
-      HandleLidSwitchExternalPower = "suspend"; # lid close on charger
-      HandleLidSwitchDocked = "ignore"; # lid close when docked
+      HandleLidSwitchExternalPower = "suspend"; # lid close on charger (faster wake than hibernate)
+      HandleLidSwitchDocked = "ignore"; # lid close when docked (external monitor stays on)
       IdleAction = "suspend-then-hibernate"; # idle 30min = sleep
       IdleActionSec = "30min"; # idle timeout
     };
 
     # Touchpad tuning via libinput (works for Hyprland/KDE/Wayland).
+    # tappingButtonMap "lrm": 1-finger = left, 2-finger = right,
+    # 3-finger = middle click. middleEmulation: two-finger click also
+    # pastes (X middle-click) for terminal workflows.
     services.libinput = {
       enable = true; # enable libinput driver
       touchpad = {
         tapping = true; # tap-to-click on
         tappingButtonMap = "lrm"; # 1/2/3 finger = left/right/middle
-        naturalScroll = false; # classic scroll direction
+        naturalScrolling = false; # classic scroll direction
         disableWhileTyping = true; # avoid palm clicks while typing
         middleEmulation = true; # two-finger click = middle click
         scrollMethod = "twofinger"; # two-finger scroll
@@ -99,6 +102,8 @@ in
     };
 
     # Wifi: powersave + randomized scan MAC (privacy, anti-tracking).
+    # backend wpa_supplicant = standard Linux Wi-Fi stack (not iwd —
+    # iwd breaks some enterprise/EAP campus networks).
     networking.networkmanager.wifi = {
       backend = "wpa_supplicant"; # standard wifi backend
       powersave = true; # save battery on wifi

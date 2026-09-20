@@ -69,37 +69,51 @@ in
     }
 
     # ── POWERSAVE: every watt counts ──
+    # TLP KEY GROUPS below (same groups repeat in balanced/performance):
+    #   CPU_*        = clock governor + turbo boost on AC vs battery.
+    #   PLATFORM_*   = firmware platform profile (fan/thermal policy).
+    #   PCIE_ASPM_*  = PCIe link power saving (deeper = less idle watts).
+    #   RADEON_*     = AMD iGPU power profile + dynamic power state.
+    #   WIFI/SOUND   = radio + audio-chip idle power.
+    #   DISK/SATA    = HDD APM parking + SATA link power (matters on
+    #                  spinning disks; near-noop on pure NVMe machines).
+    #   RUNTIME_PM/USB = autosuspend idle USB/PCI devices.
     (mkIf (cfg.powerMode == "powersave") {
       services.tlp.settings = {
         CPU_SCALING_GOVERNOR_ON_AC = "powersave";
         CPU_SCALING_GOVERNOR_ON_BAT = "powersave";
         CPU_BOOST_ON_AC = 0; # no turbo even on charger — cool + quiet
-        CPU_BOOST_ON_BAT = 0;
-        PLATFORM_PROFILE_ON_AC = "low-power";
+        CPU_BOOST_ON_BAT = 0; # no turbo unplugged — biggest battery lever
+        PLATFORM_PROFILE_ON_AC = "low-power"; # quiet fans, low thermal ceiling
         PLATFORM_PROFILE_ON_BAT = "low-power";
-        PCIE_ASPM_ON_AC = "powersave";
+        PCIE_ASPM_ON_AC = "powersave"; # PCIe link savings even on charger
         PCIE_ASPM_ON_BAT = "powersupersave"; # deepest link power saving
-        RADEON_POWER_PROFILE_ON_AC = "low";
+        RADEON_POWER_PROFILE_ON_AC = "low"; # clamp AMD iGPU clocks down
         RADEON_POWER_PROFILE_ON_BAT = "low";
-        RADEON_DPM_STATE_ON_AC = "battery";
+        RADEON_DPM_STATE_ON_AC = "battery"; # battery DPM table even on AC
         RADEON_DPM_STATE_ON_BAT = "battery";
-        WIFI_PWR_ON_AC = "on";
-        SOUND_POWER_SAVE_ON_AC = 1;
+        WIFI_PWR_ON_AC = "on"; # wifi powersave on charger too (max savings)
+        SOUND_POWER_SAVE_ON_AC = 1; # power down audio chip when idle (secs)
         SOUND_POWER_SAVE_ON_BAT = 1;
-        DISK_APM_LEVEL_ON_AC = "128";
+        DISK_APM_LEVEL_ON_AC = "128"; # allow disk head parking/spindown
         DISK_APM_LEVEL_ON_BAT = "128";
-        SATA_LINKPWR_ON_AC = "med_power_with_dipm";
-        SATA_LINKPWR_ON_BAT = "min_power";
-        RUNTIME_PM_ON_AC = "auto";
+        SATA_LINKPWR_ON_AC = "med_power_with_dipm"; # partial SATA slumber
+        SATA_LINKPWR_ON_BAT = "min_power"; # deepest SATA slumber
+        RUNTIME_PM_ON_AC = "auto"; # autosuspend idle PCI/USB devices
         RUNTIME_PM_ON_BAT = "auto";
-        USB_AUTOSUSPEND = 1;
+        USB_AUTOSUSPEND = 1; # suspend idle USB (set 0 if mouse stutters)
       } // optionalAttrs isIntel {
+        # Intel HWP dynamic boost (Intel-only; AMD ignores these keys).
         CPU_HWP_DYN_BOOST_ON_AC = 0;
         CPU_HWP_DYN_BOOST_ON_BAT = 0;
       };
     })
 
     # ── BALANCED: fast on AC, frugal on battery (default) ──
+    # Same TLP key groups as powersave (see above): governors/boost stay
+    # aggressive on charger (full turbo, auto iGPU, wifi full-speed), then
+    # drop to saving values on battery. Only deltas from powersave are
+    # commented below — uncommented keys behave as described there.
     (mkIf (cfg.powerMode == "balanced") {
       services.tlp.settings = {
         CPU_SCALING_GOVERNOR_ON_AC = "powersave"; # amd-pstate scales via EPP; boost does the work
@@ -131,6 +145,9 @@ in
     })
 
     # ── PERFORMANCE: wall power go brrr ──
+    # Full speed everywhere: turbo + high iGPU clocks + no autosuspend on
+    # AC, nearly the same on battery (drains fast). Gaming/compile mode —
+    # expect heat + fan noise. Same key groups as powersave; deltas noted.
     (mkIf (cfg.powerMode == "performance") {
       services.tlp.settings = {
         CPU_SCALING_GOVERNOR_ON_AC = "performance";

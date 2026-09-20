@@ -9,6 +9,8 @@
 
 {
   # X11 windowing base — needed by XWayland apps and the XFCE session
+  # (XWayland itself is a nested X server; without services.xserver the
+  # XWayland binary + xkb rules aren't installed and legacy apps fail).
   services.xserver.enable = true;
 
   # X11 keyboard layout (also drives the SDDM login screen + KDE):
@@ -23,17 +25,25 @@
   # correctly (required by the qylock themes).
   #
   # Automatically disabled when the Dank greeter (greetd) takes over
-  # the seat — see mango-dms.nix programs.dms-greeter.
+  # the seat — see mango-dms.nix programs.dms-greeter. greetd + SDDM
+  # both binding the seat = boot to black screen, hence the boolean NOT.
   services.displayManager.sddm.enable = !config.programs.dms-greeter.enable;
-  services.displayManager.sddm.wayland.enable = !config.programs.dms-greeter.enable;
+  services.displayManager.sddm.wayland.enable = !config.programs.dms-greeter.enable;  # Wayland greeter backend (X11 greeter can't render Qt6/qylock themes properly)
 
-  # Plasma 6 desktop
+  # Plasma 6 desktop (the full KDE session: kwin_wayland compositor,
+  # plasmashell, systemsettings, Dolphin). The login greeter offers this
+  # as the "Plasma" entry alongside MangoWC/Hyprland.
   services.desktopManager.plasma6.enable = true;
 
   # power-profiles-daemon stays OFF: laptop.nix force-disables it because
   # TLP owns the governors (the two fight otherwise). KDE's battery widget
   # still works via UPower.
+  # (power-profiles-daemon = GNOME/KDE "Balanced/Power Saver" switcher.
+  # TLP = lower-level governor/tunable manager. Both writing CPU knobs =
+  # oscillating clocks, so TLP wins and this stays off.)
 
-  # XWayland support for legacy apps under Wayland
+  # XWayland support for legacy apps under Wayland (X11-only apps like
+  # older Electron, upscayl/vesktop wrappers, GIMP plugins). Off = those
+  # windows never appear.
   programs.xwayland.enable = true;
 }

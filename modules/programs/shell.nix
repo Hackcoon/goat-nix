@@ -1,4 +1,14 @@
 # Zsh + Oh My Zsh + aliases + direnv. The whole terminal experience.
+#
+# LAYERS (all three active at once):
+#   - programs.zsh + ohMyZsh: system-wide zsh, completion, theme, plugins.
+#     STAYS SYSTEM-LEVEL (not home.nix): single-user machine, and admin
+#     recovery aliases must work even if Home Manager breaks.
+#   - shellAliases below: the alias catalog (~100 entries: eza/bat/fd
+#     replacements, nix rebuild shortcuts, git helpers). First place to
+#     look when a terminal command "does something weird".
+#   - programs.direnv + nix-direnv: per-project dev shells — entering a
+#     directory with .envrc auto-loads its flake/nix shell.
 { config, pkgs, lib, ... }:
 
 {
@@ -14,7 +24,8 @@
     enableGlobalCompInit = false;
 
     # Flat option (NOT history = { ... }) — sets both HISTSIZE and
-    # SAVEHIST. histFile already defaults to ~/.zsh_history.
+    # SAVEHIST to 10000 commands. histFile already defaults to
+    # ~/.zsh_history, so history persists across sessions.
     histSize = 10000;
 
     autosuggestions.enable = true;      # gray suggestions from history
@@ -22,10 +33,10 @@
 
     ohMyZsh = {
       enable = true;
-      theme = "af-magic";
+      theme = "af-magic";   # prompt theme (git branch, exit codes, cwd)
       plugins = [
         # "git"     # git aliases (gst, gco, gcmsg, gp, ...)
-        "sudo"
+        "sudo"      # ESC twice = prepend sudo to current command line
         # "docker"  # tab-completion for docker commands
       ];
     };
@@ -256,13 +267,18 @@
     };
 
     # Initialize Zsh tools when an interactive shell opens.
+    # zoxide = `z` jump-to-frequent-dirs (replaces reliance on full paths).
+    # fzf --zsh = fuzzy history/file completion (Ctrl-R, Ctrl-T).
     interactiveShellInit = ''
       eval "$(zoxide init zsh)"
       eval "$(fzf --zsh)"
     '';
   };
 
-  # Automatically load per-project development environments
+  # Automatically load per-project development environments:
+  # entering a dir with .envrc auto-loads its nix shell (direnv), and
+  # nix-direnv caches the environment so it starts instantly on re-entry.
+  # First visit: `direnv allow` to trust the .envrc (see `da` alias).
   programs.direnv = {
     enable = true;
     nix-direnv.enable = true;
