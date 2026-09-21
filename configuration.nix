@@ -33,6 +33,7 @@
     # workaround; on this laptop it would just fail every boot.
     ./modules/hardware/razer.nix
     ./modules/hardware/laptop.nix
+    ./modules/hardware/lid-switch.nix   # lid sensor ghosts "closed" -> ignore it (see module header)
     ./modules/hardware/power-modes.nix
 
     # --- desktop ---

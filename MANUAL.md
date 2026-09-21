@@ -439,7 +439,7 @@ Key mechanics:
 - `outputs.nixosConfigurations.nixos` is the ONE system. All commands address it as `--flake /etc/nixos#nixos`.
 - `unstablePkgs` is built in `flake.nix` (`allowUnfree = true`) and passed via `specialArgs` — any module needing it declares `{ ..., unstablePkgs, ... }:` (see `system-packages.nix`, `mango-dms.nix`).
 - Most `...inputs.nixpkgs.follows` point at stable, EXCEPT `dms`, `dank-greeter`, `dsearch` which follow `nixpkgs-unstable` (Quickshell-era deps aren't in stable yet).
-- `nixpkgs.config.allowUnfree = true` is set in the desktop-gated `nvidia.nix`; `cudaSupport = true` is global (`nix.nix`) with the `cache.nixos-cuda.org` substituter so CUDA builds download instead of compiling.
+- `nixpkgs.config.allowUnfree = true` is set in the desktop-gated `nvidia.nix`; `cudaSupport = true` is global (`nix.nix`) with the `cache.nixos-cuda.org` substituter so CUDA builds download instead of compiling. To disable CUDA + AI for fast builds, see §20.
 - `permittedInsecurePackages` allows a few pinned EOL builds (electron/pnpm). Long-term fix: find the dependent and update it, then drop the entry.
 
 ---
@@ -884,6 +884,46 @@ Cannot convert in place — backup → reformat with `@/@home/@nix/@snapshots` s
 
 Other dormant switches: `ai-services.nix` (Ollama CUDA + open-webui + Hermes — secrets via sops-nix/agenix `environmentFiles`), `desktop-extras` options (plymouth, openrgb, logitech, sane, nfs, ly-greeter…), optional `scx_lavd` scheduler (`ssd.nix`), Syncthing user service (`system-packages.nix`).
 
+### Fast builds: disabling CUDA + AI services (slow-build killers)
+
+If `nixos-rebuild` takes forever / compiles from source, disable these in order. Biggest win first:
+
+**1. CUDA globally — `modules/core/nix.nix:47` (biggest win)**
+
+```nix
+# nixpkgs.config.cudaSupport = true;
+```
+
+This forces CUDA variants of `ffmpeg`, `blender`, ML libs, etc. With it on, anything not on `cache.nixos-cuda.org` compiles locally. Commenting it out does NOT disable your NVIDIA driver — that lives in `modules/hardware/nvidia.nix` + `hardware-profiles.nix` (PRIME sync) — leave those on. The `cache.nixos-cuda.org` substituter (`nix.nix:30-35`) just becomes unused.
+
+**2. AI services — `configuration.nix:66` (already off, leave off)**
+
+```nix
+# ./modules/programs/ai-services.nix   # DISABLED for goat — Ollama CUDA + open-webui + Hermes agent not needed
+```
+
+That one file (`modules/programs/ai-services.nix:21-32`) is the only place using `pkgs.ollama-cuda` + `services.open-webui` + `services.hermes-agent`. No other module references them.
+
+**3. Hermes flake input — `flake.nix` (3 spots, must do all 3)**
+
+Even with (2) off, the flake still fetches/evaluates Hermes:
+
+- lines ~118-124: `hermes-agent.url = ...` + `hermes-agent.inputs.nixpkgs.follows`
+- line ~178 (outputs args): `hermes-agent,`
+- line ~327 (modules list): `hermes-agent.nixosModules.default`
+
+Comment out all three, then rebuild. Re-run `nix flake lock` / `flake-update` only if you want it dropped from `flake.lock` too.
+
+**4. Optional: Brave WebGPU — `configuration.nix:75`**
+
+```nix
+# ./modules/packages/brave-webgpu.nix   # comment out to drop the WebGPU build
+```
+
+Not CUDA, but it's a custom `brave.override` — rebuilds Chromium. Drop it if you don't need WebGPU test sites.
+
+Re-enable in reverse: `cudaSupport` back on → uncomment `ai-services.nix` → uncomment the 3 `flake.nix` Hermes lines → rebuild with `nix-track && nix-test && nix-switch`.
+
 ---
 
 ## 21. NixOS beginner traps (read if new)
@@ -1128,7 +1168,7 @@ virt-manager -> New VM -> ISO -> NAT/bridged, swtpm TPM for Win11. USB passthrou
 
 ### AI tools
 
-opencode (+desktop), lmstudio-bionic, llmfit (what model fits VRAM?), cherry-studio, lmstudio, antigravity-fhs -- several via unstablePkgs. Local-serve path (Ollama CUDA + open-webui + Hermes) staged in ai-services.nix (DISABLED -- secrets via sops-nix/agenix environmentFiles, never plaintext).
+opencode (+desktop), lmstudio-bionic, llmfit (what model fits VRAM?), cherry-studio, lmstudio, antigravity-fhs -- several via unstablePkgs. Local-serve path (Ollama CUDA + open-webui + Hermes) staged in ai-services.nix (DISABLED -- secrets via sops-nix/agenix environmentFiles, never plaintext; to fully strip CUDA + AI for fast builds, see §20).
 
 ---
 

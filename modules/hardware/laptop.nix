@@ -72,10 +72,10 @@ in
     # Suspend-then-hibernate: sleep 2h on battery, then hibernate to disk.
     # Needs disk swap for hibernate (zram alone cannot hibernate).
     # Without disk swap, suspend still works, hibernate fails gracefully.
-    systemd.sleep.extraConfig = ''
-      HibernateDelaySec=2h   # stay in light sleep 2h, then hibernate to disk
-      SuspendState=mem      # plain RAM sleep (not standby) — lowest idle draw
-    '';
+    systemd.sleep.settings.Sleep = {
+      HibernateDelaySec = "2h"; # stay in light sleep 2h, then hibernate to disk
+      SuspendState = "mem"; # plain RAM sleep (not standby) — lowest idle draw
+    };
     # Lid + idle behavior: close lid = sleep, docked = ignore (external monitor).
     services.logind.settings.Login = {
       HandleLidSwitch = "suspend-then-hibernate"; # lid close on battery
