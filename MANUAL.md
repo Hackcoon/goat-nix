@@ -382,6 +382,28 @@ hardware-profiles.nvidia-prime.mode = "sync";    # NVIDIA primary: best fps, dGP
 
 ### Power mode
 
+**Short answer: yes — changing `laptop.powerMode` requires a rebuild.** It is a NixOS option, not a runtime toggle. NixOS builds the TLP config files from it at build time, so editing the line alone does nothing until you activate a new generation:
+
+```zsh
+# in /etc/nixos/configuration.nix:
+laptop.powerMode = "powersave";   # or "balanced" | "performance"
+nix-track && nix-test && nix-switch   # rebuild required — no way around it
+```
+
+Takes ~30s. `nix-test` first is safe (no boot entry); `nix-switch` commits it.
+
+**But for RIGHT NOW (no rebuild), you have live controls:**
+
+| What you want | Command (instant, no rebuild) | Notes |
+|---|---|---|
+| Cycle power profile in MangoWC | `SUPER+P` (or `dms ipc call powerprofile cycle`) | DMS cycles perf/balanced/saver live via D-Bus. **Caveat:** `power-profiles-daemon` is force-disabled on this box (TLP owns governors, see `laptop.nix`), so this talks to UPower/TLP state, not the classic PPD profiles — treat it as a quick nudge, not the real preset |
+| Apply TLP battery vs AC profile now | `sudo tlp bat` / `sudo tlp ac` | Forces TLP's battery/AC table immediately (TLP auto-switches on plug/unplug anyway) |
+| Check what TLP is doing | `sudo tlp-stat -s` | Status, active profile, charge thresholds |
+| One-shot kernel tunables | `sudo powertop --auto-tune` | Applies powertop suggestions until next reboot |
+| Monitor drain/thermals | `temp` (`sensors`) · `upower -d` · `acpi -b` · `bt` (`btop`) | Watch before/after |
+
+**Rule of thumb:** live commands = temporary (gone after reboot or TLP re-applies). `laptop.powerMode` + rebuild = permanent (survives reboots, is the declared state, gets committed to git).
+
 ```nix
 laptop.powerMode = "balanced";  # | "powersave" (flights/lectures) | "performance" (gaming/compiles, charger on)
 ```
