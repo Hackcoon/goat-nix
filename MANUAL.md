@@ -8,9 +8,13 @@ This is the **operator's manual** for this machine. If `README.md` is the quick-
 
 Config lives at **`/etc/nixos`** on the machine (a git clone of `https://github.com/Hackcoon/goat-nix.git`). Edit it there. This repo you are reading is that same content.
 
+**New here? Do these two starters first:** [Starter A](#starter-a-mango-config-from-mango-config-dms) (install your MangoWC user config) and [Starter B](#starter-b-default-browser--fresh-as-default-editor) (default browser + `fresh` as editor).
+
 ---
 ## Table of contents
 
+- [Starter A: mango config from mango-config-dms](#starter-a-mango-config-from-mango-config-dms)
+- [Starter B: default browser + fresh as default editor](#starter-b-default-browser--fresh-as-default-editor)
 - [1. System at a glance](#1-system-at-a-glance)
 - [2. First install on a fresh machine](#2-first-install-on-a-fresh-machine)
 - [3. The edit → test → switch loop (read this first)](#3-the-edit--test--switch-loop-read-this-first)
@@ -40,6 +44,106 @@ Config lives at **`/etc/nixos`** on the machine (a git clone of `https://github.
 - [27. Dev setup on this box (VSCodium, languages, direnv, containers)](#27-dev-setup-on-this-box-vscodium-languages-direnv-containers)
 - [Appendix A: verification checklist](#appendix-a-verification-checklist)
 - [Appendix B: file index](#appendix-b-file-index)
+
+---
+
+## Starter A: mango config from mango-config-dms
+
+Your MangoWC + DMS *user* config lives in its own repo: **https://github.com/Hackcoon/mango-config-dms**. The NixOS *system* part (compositor, DMS 1.6, greeter) is already in this flake (`modules/desktop/mango-dms.nix`, see §10) — this repo is only the `~/` side. (`dotfiles/mango/` in goat-nix is a copy; treat the GitHub repo as source of truth.)
+
+What goes where:
+
+| Repo path | Destination | What it is |
+|---|---|---|
+| `mango/` | `~/.config/mango/` | `config.conf`, `media.conf`, `*.sh` scripts, `dms/` fragments |
+| `dms/settings.json` + `dms/plugins.lock.json` | `~/.config/DankMaterialShell/` | bar layout, widgets, plugin list |
+| `dms/amoledBlack/` | `~/.config/DankMaterialShell/themes/` | the theme |
+| `mango-session.target` | `~/.config/systemd/user/` | session target mango starts via `exec-once` |
+
+Install (fresh machine, or to take upstream config):
+
+```bash
+# 1. Back up anything you already have
+tar -czf ~/mango-backup-$(date +%F).tar.gz -C ~ .config/mango .config/DankMaterialShell/settings.json 2>/dev/null
+
+# 2. Clone + copy into place
+git clone https://github.com/Hackcoon/mango-config-dms.git /tmp/mango-config-dms
+cp -r /tmp/mango-config-dms/mango ~/.config/
+mkdir -p ~/.config/DankMaterialShell/themes ~/.config/systemd/user
+cp /tmp/mango-config-dms/dms/settings.json /tmp/mango-config-dms/dms/plugins.lock.json ~/.config/DankMaterialShell/
+cp -r /tmp/mango-config-dms/dms/amoledBlack ~/.config/DankMaterialShell/themes/
+cp /tmp/mango-config-dms/mango-session.target ~/.config/systemd/user/
+
+# 3. Scripts executable + validate (must exit 0 with no output) + reload
+chmod +x ~/.config/mango/*.sh
+mango -p -c ~/.config/mango/config.conf
+systemctl --user daemon-reload
+```
+
+4. Log into the `mango` session, press `SUPER+H` — the cheatsheet should list all binds. If bar widgets are missing: `dms ipc call settings focusOrToggle` → Plugins → Scan → enable `mangoWmLayoutManager` → DankBar → add widget → `dms restart`.
+5. Hotkey docs live in that repo: `mango-ultimate-hotkeys.md`, `FREE-KEYBINDS.md`, `CHEATSHEET-AI-GUIDE.md`; NixOS system side: `mango-dms-nixos-guide.md`.
+
+**No rebuild needed** — mango hot-reloads `~/.config/mango` live. For later updates: `git pull` the clone and re-copy. Keep your own tweaks safe with `mango-status` / `mango-save` (that dir is its own git repo) or fork the repo.
+
+---
+
+## Starter B: default browser + fresh as default editor
+
+### Default browser (rebuild required)
+
+THE setting is three lines in `modules/core/default-apps.nix`:
+
+```nix
+"x-scheme-handler/http"  = "com.brave.Browser.desktop";
+"x-scheme-handler/https" = "com.brave.Browser.desktop";
+"text/html"              = "com.brave.Browser.desktop";
+```
+
+1. Find your browser's exact `.desktop` name — never guess, list them: `ls /run/current-system/sw/share/applications/ | grep -i -E 'firefox|zen|brave|qutebrowser|librewolf'`.
+2. Replace the three values, then `nix-track && nix-test && nix-switch` (it's NixOS config — rebuild required).
+3. Verify: `open https://nixos.org` (or `xdg-open`) launches your pick.
+
+Good to know: Mango `SUPER+B` runs `xdg-open https://`, so it **follows the default automatically**. `SUPER+F` (Firefox), `SUPER+K` (qutebrowser), `SUPER+Z` (zen) are hardcoded extras and stay. The YouTube launcher in `home.nix` hardcodes `brave --app=…` — edit it if you fully switch. Other browsers stay installed; this only changes the default.
+
+### fresh as default editor (3 layers)
+
+`fresh-editor` is already installed system-wide; the command is **`fresh`**. "Default editor" means three separate things — set the ones you want:
+
+**1. Terminal default** (`git commit`, `sudoedit`, scripts) — in `home.nix`:
+
+```nix
+home.sessionVariables = {
+  EDITOR = "fresh";
+  VISUAL = "fresh";
+};
+```
+
+This replaces `codium --wait` (`--wait` is VSCodium-only; terminal editors block by nature). Rebuild required: `nix-track && nix-test && nix-switch`. Verify: `echo $EDITOR`, then `sudoedit /tmp/t` should open fresh.
+
+**2. Mango `SUPER+C` hotkey** — currently `bind=SUPER,c,spawn,codium`. fresh is terminal-based, so launch it inside kitty:
+
+```
+bind=SUPER,c,spawn,kitty -e fresh
+```
+
+Edit `~/.config/mango/config.conf` (or your mango-config-dms copy, Starter A). Hot-reloads — **no rebuild**. Validate: `mango -p -c ~/.config/mango/config.conf`.
+
+**3. GUI "open .txt with fresh"** — fresh ships no `.desktop` file (it's a terminal app), so create one at `~/.local/share/applications/fresh.desktop`:
+
+```ini
+[Desktop Entry]
+Name=Fresh
+Exec=kitty -e fresh %F
+Icon=text-editor
+Terminal=false
+Type=Application
+Categories=Utility;TextEditor;
+MimeType=text/plain;
+```
+
+Then `update-desktop-database ~/.local/share/applications`, right-click any `.txt` → Open With → Fresh → Set as default. Note: KDE records that choice in `~/.config/mimeapps.list`, which **overrides** the system defaults (§16) — that override is the mechanism working as intended for a personal preference.
+
+Keep VSCodium installed as backup — `SUPER+C` is one line to flip back, and big refactors are nicer in a GUI.
 
 ---
 
