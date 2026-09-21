@@ -31,6 +31,13 @@ Config lives at **`/etc/nixos`** on the machine (a git clone of `https://github.
 - [18. Git + GitHub workflow for /etc/nixos](#18-git--github-workflow-for-etcnixos)
 - [19. Troubleshooting](#19-troubleshooting)
 - [20. Re-enable later: Secure Boot, qylock, Btrfs](#20-re-enable-later-secure-boot-qylock-btrfs)
+- [21. NixOS beginner traps (read if new)](#21-nixos-beginner-traps-read-if-new)
+- [22. Installing software the NixOS way](#22-installing-software-the-nixos-way)
+- [23. Files: where things live, what to edit, what to never touch](#23-files-where-things-live-what-to-edit-what-to-never-touch)
+- [24. Rescue: when the desktop won't start](#24-rescue-when-the-desktop-wont-start)
+- [25. Firewall, unfree, passwords, users](#25-firewall-unfree-passwords-users)
+- [26. Daily Linux survival (files, disks, USB, archives, VPN)](#26-daily-linux-survival-files-disks-usb-archives-vpn)
+- [27. Dev setup on this box (VSCodium, languages, direnv, containers)](#27-dev-setup-on-this-box-vscodium-languages-direnv-containers)
 - [Appendix A: verification checklist](#appendix-a-verification-checklist)
 - [Appendix B: file index](#appendix-b-file-index)
 
@@ -775,6 +782,252 @@ Other dormant switches: `ai-services.nix` (Ollama CUDA + open-webui + Hermes —
 
 ---
 
+## 21. NixOS beginner traps (read if new)
+
+These confuse every newcomer. Learn them once and NixOS clicks.
+
+### 21.1 Nothing is installed "normally"
+
+On Ubuntu/Windows you download an installer and click through it. On NixOS that never works. There is no /usr/bin you can copy into -- /usr/bin barely exists and /nix/store is read-only. Everything comes from three doors:
+
+1. Declared in config (system-packages.nix, module enable = true) + rebuild -- permanent, versioned in git. This is home.
+2. Flatpak (flatpak install flathub app) -- sandboxed desktop apps, no rebuild needed. Good for proprietary stuff.
+3. Try-before-you-declare (nrun pkg, nshell pkg) -- runs once from cache, installs nothing.
+
+What NOT to do: sudo pip install, npm install -g, curl | sudo bash, downloading .deb files, cargo install into /usr/local. They fail (read-only filesystem) or break on next rebuild. Python/Node projects: use project venvs + direnv, see §27.
+
+### 21.2 Editing a file does nothing until you rebuild
+
+Changing /etc/nixos files only edits text. The running system does not watch them. Every change needs:
+
+```zsh
+nix-track && nix-test && nix-switch
+```
+
+Forget nix-track and new files are invisible. Forget nix-switch and you run the old generation wondering why nothing changed. Check with nix-current + nix-generations.
+
+### 21.3 /nix/store is read-only -- that is the feature
+
+Error read-only file system under /nix/store or /run/current-system? Do not fight it. Those are build outputs. Edit the SOURCE .nix file and rebuild. Same for HM dotfiles: if ~/.config/kitty/kitty.conf is a symlink into the store, edit home.nix instead.
+
+### 21.4 Rebooting never loses your setup
+
+Every generation is a complete bootable system. Rebooting boots the current generation again. Your config is in git + GitHub -- a dead SSD costs reinstall time, never your setup. Uncommitted changes are the only thing you can lose: config-savem + git push.
+
+### 21.5 Updates never half-apply
+
+nixos-rebuild builds the whole new system first, then flips one symlink (/nix/var/nix/profiles/system). Build fails = running system untouched. New system bad = pick previous generation in boot menu (§5). There is no half-updated broken state.
+
+### 21.6 sudo rules: only rebuild needs it
+
+- NEEDS sudo: nixos-rebuild, nix-collect-garbage, tlp bat/ac, system systemctl, editing /etc/nixos.
+- NEVER sudo: git, gh, flatpak install --user, systemctl --user, dms, editing ~/ files.
+- ESC twice in zsh prepends sudo to the current line.
+
+### 21.7 Do not enable two things that own the same seat
+
+NixOS lets you declare contradictions then fails at boot: two display managers (greetd vs SDDM vs ly), two GC timers (nh clean vs nix.gc), TLP vs power-profiles-daemon, two portals for one session. When adding anything new, check: does something already own this?
+
+---
+
+## 22. Installing software the NixOS way
+
+Decision tree for I want app X:
+
+```text
+Try first:   nrun pkg        (run once, installs nothing)
+             nshell pkg      (one-off shell with it)
+             nix-search pkg  (is it in stable nixpkgs?)
+             nh-search pkg   (packages AND options)
+Keep it, open-source/nixpkgs -> add to environment.systemPackages
+             in modules/packages/system-packages.nix + rebuild
+             (fresher build? use unstablePkgs.pkg)
+Keep it, proprietary/sandboxed -> flatpak install flathub app
+One-off .AppImage -> chmod +x && run (binfmt on), or gearlever.
+             Constant use? package with appimageTools.wrapType2 (§15).
+Dev language libs (pip/npm/cargo) -> NEVER global. Project venv + direnv (§27).
+Just need an OPTION name? -> manix keyword
+```
+
+```bash
+nrun cowsay
+nshell python3 ripgrep
+# keep it -> edit system-packages.nix, add the line, then:
+nix-track && nix-test && nix-switch
+```
+
+Unstable for one app (fresher without destabilizing):
+
+```nix
+unstablePkgs.opencode   # AI coding agent (unstable = newer)
+```
+
+Removing is the mirror: delete the line (or flatpak uninstall app), rebuild. No leftover registry -- unreferenced store paths get GCed.
+
+---
+
+## 23. Files: where things live, what to edit, what to never touch
+
+| Path | What | Touch? |
+|---|---|---|
+| /etc/nixos/ | YOUR config (git repo, clone of goat-nix) | YES -- edit here, then rebuild |
+| ~/.config/mango/, ~/.config/hypr/, ~/.config/DankMaterialShell/ | Compositor configs (hand-managed, hot-reload) | YES -- edit freely, no rebuild (mango: mango -p) |
+| ~/ dotfiles managed by HM (kitty, btop, git) | Symlinks into /nix/store | NO -- edit home.nix + rebuild |
+| /nix/store | Immutable build outputs | NO -- read-only by design |
+| /run/current-system | Symlink to live generation | NO -- inspect only (nix-current) |
+| /etc/nixos/hardware-configuration.nix | YOUR disk UUIDs | On machine only, NEVER commit (git-ignored) |
+| /etc/secureboot/, /var/lib/searx/searx.env | Keys/secrets | NO -- never git, USB only |
+| journalctl logs (capped 200M) | Logs | YES -- read freely |
+| /nix/var/nix/profiles/system | Generation links | Inspect (nix-generations), prune via nix-keep-10, never rm by hand |
+| ~/.local/share/applications/ | Your launchers (HM YouTube app here) | YES -- custom .desktop files go here |
+
+```bash
+cden                       # jump to /etc/nixos
+ls -la ~/.config/ | head   # symlink into store = Nix owns it
+readlink ~/.config/kitty/kitty.conf
+f pattern                  # fd fast find
+dsearch search "name"       # indexed whole-filesystem search
+```
+
+Backups that matter: git push your config (the whole OS recipe) + external backup of /home (photos, docs, ~/.mozilla, ~/Documents). Everything else rebuilds from the repo.
+
+---
+
+## 24. Rescue: when the desktop will not start
+
+Work top to bottom:
+
+1. Wrong session or hung greeter? Check session list (mango vs Plasma vs Hyprland). Frozen? Ctrl+Alt+F2 -> TTY2 -> log in -> restart-gui (sudo systemctl restart display-manager) or sudo systemctl restart greetd.
+2. Boot the previous generation. Reboot -> systemd-boot menu -> arrows -> older entry -> Enter. Instantly back on the working system. Then fix config + nix-switch.
+3. TTY console: Ctrl+Alt+F1..F6 works with no desktop. Log in, then nix-rollback, or cden + config-log + fix + rebuild.
+4. Diagnose from TTY:
+
+```bash
+boot-status                # systemctl --failed
+logs-err                   # this boot errors
+sclogs greetd              # greeter logs
+sclogs display-manager
+ju -u dms                  # DMS user logs
+ju -u kanshi               # display daemon
+dmesg | grep -E 'amdgpu|nvidia|failed|error' | tail -30
+resolvectl status          # DNS alive? (hotel portal -> dns.provider=native)
+```
+
+5. Nuclear: boot USB installer -> mount disk -> nixos-enter -> fix /etc/nixos -> rebuild. git history shows which commit broke it.
+
+Ladder: previous generation (30s) -> nix-rollback (1 min) -> TTY + fix + rebuild (10 min) -> USB + nixos-enter (rare). You cannot brick NixOS by editing config -- old generations stay bootable.
+
+---
+
+## 25. Firewall, unfree, passwords, users
+
+### Firewall
+
+NixOS firewall is ON by default (deny incoming, allow outgoing). Openings here are declared, not clicked: Steam Remote Play via remotePlay.openFirewall (gaming.nix). Your own port (dev server :8000 for LAN):
+
+```nix
+networking.firewall.allowedTCPPorts = [ 8000 ];
+```
+
+then rebuild. Check listeners: ports (ss -tulpn).
+
+### Unfree packages
+
+NixOS blocks proprietary software unless you opt in. This box already does (NVIDIA driver, unstable, Steam/Brave/GitKraken/LM Studio all fine). If you see error: Package X has an unfree license, that is the guard -- fix by scoping allowUnfree, never by downloading binaries by hand.
+
+### Passwords and users
+
+```bash
+passwd            # change YOUR password
+sudo passwd goat  # set/reset goat (first boot!)
+```
+
+User goat is the only human: wheel (sudo), networkmanager (Wi-Fi), libvirtd (VMs), wireshark (capture). Second user or new groups? Edit modules/users/users.nix + rebuild, not useradd (imperative changes drift from declared truth).
+
+### SSH hardening (before exposing to internet)
+
+services.openssh.enable is on for LAN (ssh goat@ip, find IP with myip). Password auth still allowed -- fine at home, NOT on public IP. Before port-forwarding: switch to key-only auth + fail2ban in config first.
+
+---
+
+## 26. Daily Linux survival (files, disks, USB, archives, VPN)
+
+Zero-muscle-memory guide. All tools preinstalled.
+
+### Files
+
+GUI: Dolphin (SUPER+D) and Thunar (SUPER+E). Terminal: ls/ll/lsd, cd and z (zoxide jump: z partial), cp -iv / mv -iv, rm -Iv (PROMPTS -- terminal rm is PERMANENT, no trash!), mkdir -pv, cat (=bat), tree. Find: f name (fd), rg text (ripgrep), dsearch search name (indexed). Dolphin/Thunar Delete = trash, Shift+Delete = permanent.
+
+### Disks and USB
+
+```bash
+drives    # lsblk -f -- disks, partitions, filesystems
+disks     # df -h -- space per mount
+lsusb     # USB devices
+```
+
+USB sticks auto-mount in Dolphin/Thunar (click the device). Manual: udisksctl mount -b /dev/sdX1. EJECT before unplugging or risk corruption. NTFS/exFAT work out of the box.
+
+### Archives
+
+Installed: unzip, unrar, p7zip, zip, gzip, xz, zstd (Ark in Dolphin handles them). Quickies: unzip x.zip, 7z x x.7z, unrar x x.rar, tar -xzf x.tar.gz.
+
+### Screenshots, clipboard, share
+
+SUPER+S region -> satty, SUPER+Shift+S window, Print fullscreen (grim/slurp/satty + flameshot). Clipboard: wl-copy/wl-paste, history SUPER+V (cliphist). Black screen share? SUPER+Shift+O restarts portals live, retry.
+
+### VPN and enterprise Wi-Fi
+
+nmtui (terminal UI) -> Add VPN or import .ovpn/WireGuard file. GUI: applet or KDE settings. Never hand-edit wpa_supplicant (NM overwrites). Campus EAP: wpa_supplicant backend already set (iwd breaks EAP).
+
+### Printing and scanning for real
+
+CUPS on: plug USB printer or join Wi-Fi -> KDE Print Manager or localhost:631 -> Add (driverless IPP/AirPrint = no driver hunt). HP plugins: see printing.nix header. Scan: desktop-extras.sane.enable + rebuild -> Skanpage.
+
+### Sound and Bluetooth day-to-day
+
+Pair: Blueman tray or bluetoothctl -> scan on -> pair -> connect. Then pavucontrol -> profile (A2DP music, HSP/HFP calls). Volumes: media keys, pamixer, or DMS SUPER+O.
+
+### Time
+
+Asia/Dubai UTC+4 no DST. Clock wrong after dual-boot Windows? hardware-profiles.local-hw-clock.enable = true + rebuild (Windows stores local RTC time).
+
+---
+
+## 27. Dev setup on this box (VSCodium, languages, direnv, containers)
+
+### Editor
+
+VSCodium is default (EDITOR/VISUAL = codium --wait, --wait so git commit blocks). Launch SUPER+C in MangoWC. Terminal: micro (easy, default), vim/vi (neovim installed). Language servers: nil, nixd (Nix). Format Nix: nix-format (nixfmt).
+
+### Languages (global)
+
+gcc, gdb, gnumake, cmake, go, rustup (run rustup default stable once), python3 + pip, nodejs_22, lua + luarocks. Check: go version, rustc --version, python3 --version, node --version.
+
+### Golden rule: project deps stay in the project
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate && pip install pkgs
+npm install        # local node_modules, never -g
+cargo build        # project-local target/, fine
+```
+
+Reproducible toolchains: project flake.nix + .envrc, then da (direnv allow) once -- entering the dir auto-loads it. devenv installed for this. nix-direnv caches so re-entry is instant. Active direnv shells hold gcroots (--keep-one in nh clean protects them).
+
+### Containers without daemons
+
+Podman backend: docker CLI works (dockerCompat), socket on demand (winboat uses it). Try docker run hello-world. Full toolbox: distrobox create -i ubuntu:22.04 -n ubx. Real Docker daemon instead? virtualisation.docker.enable = true + rebuild.
+
+### VMs
+
+virt-manager -> New VM -> ISO -> NAT/bridged, swtpm TPM for Win11. USB passthrough: Spice redirection. You are in libvirtd group: no permission errors.
+
+### AI tools
+
+opencode (+desktop), lmstudio-bionic, llmfit (what model fits VRAM?), cherry-studio, lmstudio, antigravity-fhs -- several via unstablePkgs. Local-serve path (Ollama CUDA + open-webui + Hermes) staged in ai-services.nix (DISABLED -- secrets via sops-nix/agenix environmentFiles, never plaintext).
+
+---
+
 ## Appendix A: verification checklist
 
 Run after install or any big update:
@@ -803,7 +1056,7 @@ fwupdmgr get-devices                        # firmware visibility
 | `configuration.nix` | Entry point + machine switches (PRIME, DNS, power, extras, Btrfs) |
 | `flake.nix` / `flake.lock` | Inputs + `nixosConfigurations.nixos` + `unstablePkgs` + HM wiring |
 | `home.nix` | HM user config (git, kitty, btop, dsearch, kanshi, YouTube launcher) |
-| `MANUAL.md` | This handbook |
+| `MANUAL.md` | This handbook (§1-20 operator guide, §21-27 beginner survival) |
 | `modules/core/boot.nix` | systemd-boot, stable kernel, amd_pstate + deep-sleep flags |
 | `modules/core/nix.nix` | Flakes, caches/CUDA, `nh clean` weekly GC, nix-ld |
 | `modules/core/locale.nix` | Asia/Dubai, en_US, es console keys |
